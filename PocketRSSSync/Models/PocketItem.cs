@@ -24,7 +24,7 @@
                 {
                     consumer_key = auth.ConsumerKey,
                     access_token = auth.AccessToken,
-                    detailType = "complete",
+                    detailType = "simple",
                     state = "all"
                 });
             request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
@@ -41,12 +41,15 @@
             var items = new List<PocketItem>();
 
             foreach (var listItem in dynConfig.list)
-            {
-                items.Add(new PocketItem()
+            {   
+                if (listItem.Value.status != "2")
                 {
-                    Title = listItem.Value.given_title,
-                    Url = listItem.Value.given_url
-                });
+                    items.Add(new PocketItem()
+                    {
+                        Title = listItem.Value.given_title,
+                        Url = listItem.Value.given_url
+                    });
+                }
             }
 
             return items;

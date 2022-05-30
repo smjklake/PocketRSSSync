@@ -5,7 +5,6 @@ namespace PocketRSSSync
     using Microsoft.Extensions.Logging;
     using PocketRSSSync.Models;
     using RssFeedParser;
-    using RssFeedParser.Models;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -43,52 +42,54 @@ namespace PocketRSSSync
 
                 var feedUris = config.GetSection("Feeds").Get<List<string>>();
 
-                var taskList = new List<Task<RssFeed>>();
+                var taskList = new List<Task>();
 
                 foreach (var feedUri in feedUris)
                 {
-                    try
-                    {
-                        var feed = (await FeedReader.ParseFeed(feedUri)).Articles;
-                        var skipped = feed.Where(a => a.Link.Contains('#')).OrderBy(a => a.Link).ToList();
-                        var articles = feed.DistinctBy(a => a.Link).Where(a => !a.Link.Contains('#')).ToList();
-
-                        foreach (var article in articles)
-                        {
-                            if (currentItems.Select(i => i.Url).Contains(article.Link))
-                            {
-                                continue;
-                            }
-
-                            var pocketItem = new PocketItem()
-                            {
-                                Title = article.Title,
-                                Url = article.Link,
-                            };
-
-                            await PocketItem.AddPocketItem(Auth, client, pocketItem);
-                            count++;
-                        }
-
-                        foreach (var skip in skipped)
-                        {
-                            logger.LogInformation("Skipped: {}\n{}", skip.Link, skip.Title);
-                        }
-                    }
-
-                    catch (HttpRequestException ex)
-                    {
-                        if (ex.StatusCode != System.Net.HttpStatusCode.NotFound)
-                        {
-                            throw;
-                        }
-                        logger.LogError($"{feedUri} returned {ex.StatusCode.ToString()}");
-                    }
-
+                    taskList.Add(ProcessFeed(feedUri, currentItems));
                 }
+
+                Task.WaitAll(taskList.ToArray());
 
                 logger.LogInformation("{count} total items added to Pocket since program starting. Worker running at: {time}", count, DateTimeOffset.Now);
                 await Task.Delay(new TimeSpan(2, 0, 0), stoppingToken);
+            }
+        }
+
+        private async Task ProcessFeed(string feedUri, List<PocketItem> currentItems)
+        {
+            try
+            {
+                var feed = (await FeedReader.ParseFeed(feedUri)).Articles;
+                var skipped = feed.Where(a => a.Link.Contains('#')).OrderBy(a => a.Link).ToList();
+                var articles = feed.DistinctBy(a => a.Link).Where(a => !a.Link.Contains('#')).ToList();
+
+                foreach (var article in articles)
+                {
+                    if (currentItems.Select(i => i.Url).Contains(article.Link))
+                    {
+                        continue;
+                    }
+
+                    var pocketItem = new PocketItem()
+                    {
+                        Title = article.Title,
+                        Url = article.Link,
+                    };
+
+                    await PocketItem.AddPocketItem(Auth, client, pocketItem);
+                    count++;
+                }
+
+                foreach (var skip in skipped)
+                {
+                    logger.LogInformation("Skipped: {}\n{}", skip.Link, skip.Title);
+                }
+            }
+
+            catch (HttpRequestException ex)
+            {
+                logger.LogError($"{feedUri} returned {ex.StatusCode}");
             }
         }
     }
