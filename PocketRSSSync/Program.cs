@@ -3,13 +3,19 @@ namespace PocketRSSSync
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
     using Microsoft.Extensions.Hosting;
-    using Microsoft.Extensions.Logging;
+    using Serilog;
     using System;
 
     public class Program
     {
         public static void Main(string[] args)
         {
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Debug()
+                .Enrich.FromLogContext()
+                .WriteTo.Console()
+                .WriteTo.File("logs/PocketRSSSync-.txt", rollingInterval:RollingInterval.Day)
+                .CreateLogger();
             CreateHostBuilder(args).Build().Run();
         }
 
@@ -28,11 +34,7 @@ namespace PocketRSSSync
                 {
                     services.AddHttpClient();
                     services.AddHostedService<Worker>();
-                    services.AddLogging(logging =>
-                    {
-                        var loggingConfig = hostContext.Configuration.GetSection("Logging");
-                        logging.AddFile(loggingConfig);
-                    });
+                    services.AddSerilog();
                 });
     }
 }
